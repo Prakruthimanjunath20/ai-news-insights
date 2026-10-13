@@ -1,0 +1,42 @@
+[project]
+name = "ai-news-insights"
+version = "0.1.0"
+description = "Clusters duplicate financial news into stories, extracts companies, sentiment and market impact, and serves it through a typed FastAPI service."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Prakruthi Manjunath" }]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "scikit-learn>=1.5",
+    "httpx>=0.27",
+    "feedparser>=6.0",
+]
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.40"]
+
+[project.scripts]
+news-insights = "news_insights.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/news_insights"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
