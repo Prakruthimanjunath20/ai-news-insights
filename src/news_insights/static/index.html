@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI News Insights</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f24; --muted: #646a73; --line: #e2e0d8;
+    --accent: #1f5f8b; --on-accent: #ffffff; --pos: #1b7a4a; --neg: #b3362c; --neu: #6b6f76;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171b; --panel: #1d2026; --ink: #e9e7e1; --muted: #9aa0a8; --line: #2c3038;
+      --accent: #6fb0dd; --on-accent: #0f1a22; --pos: #5cc18b; --neg: #ef7b70; --neu: #a0a4ab;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.45; }
+  header { padding: 28px 16px 8px; max-width: 1100px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 1.5rem; letter-spacing: -0.01em; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 24px;
+         grid-template-columns: minmax(0, 1fr) 300px; }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+  form { display: flex; gap: 8px; margin-bottom: 12px; }
+  input[type=search] { flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+                       background: var(--panel); color: var(--ink); font-size: 1rem; }
+  button { padding: 10px 16px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent);
+           font-size: 1rem; cursor: pointer; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .examples button { background: transparent; color: var(--accent); border: 1px solid var(--line);
+                     padding: 4px 10px; font-size: .85rem; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          padding: 14px 16px; margin-bottom: 12px; }
+  .card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+  .card p { margin: 0 0 10px; color: var(--muted); font-size: .92rem; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .8rem; }
+  .pill { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+  .positive { color: var(--pos); border-color: currentColor; }
+  .negative { color: var(--neg); border-color: currentColor; }
+  .neutral { color: var(--neu); }
+  .why { color: var(--muted); font-size: .8rem; margin-top: 8px; }
+  aside h2 { font-size: 1rem; margin: 0 0 10px; }
+  .alert { padding: 10px 12px; border-left: 3px solid var(--line); background: var(--panel);
+           border-radius: 6px; margin-bottom: 8px; font-size: .88rem; }
+  .alert.positive { border-left-color: var(--pos); color: inherit; }
+  .alert.negative { border-left-color: var(--neg); color: inherit; }
+  .alert strong { display: block; }
+  .empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>AI News Insights</h1>
+  <p id="status">Loading…</p>
+</header>
+<main>
+  <section>
+    <form id="search">
+      <input type="search" id="q" placeholder="Search a company, ticker, sector or theme" aria-label="Search">
+      <button type="submit">Search</button>
+    </form>
+    <div class="examples" id="examples"></div>
+    <div id="results"></div>
+  </section>
+  <aside>
+    <h2>Alerts</h2>
+    <div id="alerts"></div>
+  </aside>
+</main>
+<script>
+const EXAMPLES = ["Barclays", "BP", "interest rate impact", "banking sector update", "FCA", "supermarkets"];
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (key === "class") node.className = value; else node.setAttribute(key, value);
+  }
+  for (const child of children) node.append(child);  // append() inserts text safely
+  return node;
+}
+
+function storyCard(story, matched) {
+  const meta = el("div", { class: "meta" },
+    el("span", { class: `pill ${story.sentiment.label}` },
+       `${story.sentiment.label} ${story.sentiment.score.toFixed(2)}`),
+    el("span", { class: "pill" }, `${story.article_ids.length} article${story.article_ids.length > 1 ? "s" : ""}`),
+    ...story.impacted_stocks.slice(0, 5).map(s =>
+      el("span", { class: "pill", title: `${s.company}: ${s.reason}` }, `${s.ticker} ${s.confidence.toFixed(1)}`)));
+  const card = el("article", { class: "card" },
+    el("h3", {}, story.headline), el("p", {}, story.summary), meta);
+  if (matched && matched.length) card.append(el("div", { class: "why" }, `Matched: ${matched.join(" · ")}`));
+  return card;
+}
+
+async function getJSON(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return response.json();
+}
+
+async function showLatest() {
+  const stories = await getJSON("/stories?limit=20");
+  document.getElementById("results").replaceChildren(...stories.map(s => storyCard(s)));
+}
+
+async function runSearch(query) {
+  const results = document.getElementById("results");
+  const hits = await getJSON(`/search?q=${encodeURIComponent(query)}`);
+  results.replaceChildren(...(hits.length
+    ? hits.map(h => storyCard(h.story, h.matched))
+    : [el("p", { class: "empty" }, `No stories match “${query}”.`)]));
+}
+
+async function showAlerts() {
+  const alerts = await getJSON("/alerts");
+  document.getElementById("alerts").replaceChildren(...(alerts.length
+    ? alerts.slice(0, 10).map(a => el("div", { class: `alert ${a.direction}` },
+        el("strong", {}, `${a.ticker} · ${a.direction}`), a.headline))
+    : [el("p", { class: "empty" }, "No alerts.")]));
+}
+
+document.getElementById("search").addEventListener("submit", event => {
+  event.preventDefault();
+  const query = document.getElementById("q").value.trim();
+  (query ? runSearch(query) : showLatest()).catch(console.error);
+});
+
+document.getElementById("examples").replaceChildren(...EXAMPLES.map(text => {
+  const button = el("button", { type: "button" }, text);
+  button.addEventListener("click", () => { document.getElementById("q").value = text; runSearch(text); });
+  return button;
+}));
+
+getJSON("/health").then(h => {
+  document.getElementById("status").textContent =
+    `${h.stories} stories from ${h.articles} articles · enriched with ${h.enricher}`;
+}).catch(() => { document.getElementById("status").textContent = "API not reachable"; });
+showLatest().catch(console.error);
+showAlerts().catch(console.error);
+</script>
+</body>
+</html>
